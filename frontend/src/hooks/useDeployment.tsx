@@ -84,18 +84,19 @@ export const useDeployment = () => {
       // This matches exactly what src/api/server.ts expects
       const payload = {
         config: {
-          // Send ID if present, otherwise null. Backend handles the check.
           spreadsheetId: globalSettings.spreadsheetId || null,
+
+          // [NEW] Pass the mapping object { "0": "Wallet" }
+          columnMapping: globalSettings.columnMapping || {},
+
           trigger: {
-            type: triggerNode.data.type, // e.g. 'sheets' or 'webhook'
-            ...triggerNode.data.config, // e.g. { colIndex: 5, value: 'Pending' }
+            type: triggerNode.data.type,
+            ...triggerNode.data.config,
           },
           actions: sortedActions,
         },
-        // Optional: Context for manual testing/webhooks
         context: {
           TEST_USER: "Frontend_User",
-          TEST_SOURCE: "Frontend Deploy",
         },
       };
 

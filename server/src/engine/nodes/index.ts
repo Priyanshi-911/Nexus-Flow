@@ -10,6 +10,8 @@ import { writeContract } from "./writeContract.js";
 import { telegramNotify } from "./telegramNotify.js";
 import { sendEmail } from "./emailSend.js";
 import { resolveENS } from "./resolveENS.js";
+import { httpReq } from "./httpReq.js";
+import { extractJson } from "./jsonExtractor.js";
 
 export const NODE_REGISTRY: Record<string, Function> = {
     "transfer": transfer,    
@@ -24,4 +26,6 @@ export const NODE_REGISTRY: Record<string, Function> = {
     "telegram_notify": telegramNotify,
     "email_send": sendEmail,
     "resolve_ens": resolveENS,
+    "http_request": httpReq,
+    "json_extract": extractJson,
 };
