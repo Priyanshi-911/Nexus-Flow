@@ -1,7 +1,7 @@
 import { google } from "googleapis";
 
 const auth = new google.auth.GoogleAuth({
-    keyFile: `D://nexus-flow//src//google-service-account.json`,
+    keyFile: `D://nexus-flow//server//src//google-service-account.json`,
     scopes: "https://www.googleapis.com/auth/spreadsheets",
 })
 

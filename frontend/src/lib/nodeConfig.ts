@@ -1,10 +1,9 @@
 import { 
   Zap, ArrowRightLeft, Database, Calculator, MessageSquare, Mail, 
-  FileSpreadsheet, Layers, Search, Globe, Rss, Clock, Fingerprint, 
+  FileSpreadsheet, Layers, Search, Globe, Rss, Fingerprint, 
   Variable, FileJson, Calendar, Flame, Send
 } from 'lucide-react';
 
-// --- THEME MAPPING ---
 export const CATEGORY_COLORS: Record<string, any> = {
   trigger: { bg: 'bg-amber-50', border: 'border-amber-200', text: 'text-amber-600', accent: 'bg-amber-500' },
   web3:   { bg: 'bg-indigo-50', border: 'border-indigo-200', text: 'text-indigo-600', accent: 'bg-indigo-500' },
@@ -14,33 +13,40 @@ export const CATEGORY_COLORS: Record<string, any> = {
   ops:    { bg: 'bg-blue-50', border: 'border-blue-200', text: 'text-blue-600', accent: 'bg-blue-500' },
 };
 
-// --- COMPLETE 18-NODE CONFIGURATION ---
 export const NODE_TYPES: Record<string, any> = {
   
-  // 1. TRIGGERS & CORE
+  // --- TRIGGERS ---
   'webhook': { 
     label: 'Webhook Trigger', category: 'trigger', icon: Zap,
     inputs: [{ name: 'triggerId', label: 'Webhook ID', type: 'text', readOnly: true }] 
   },
+  'sheets': {
+    label: 'G-Sheet Watcher', category: 'trigger', icon: FileSpreadsheet, 
+    inputs: [
+      { name: 'colIndex', label: 'Column Index (0=A)', type: 'number', placeholder: '4' },
+      { name: 'value', label: 'Trigger Value', type: 'text', placeholder: 'Pending' }
+    ]
+  },
 
-  // 2. WEB3 TRANSACTIONS
+  // --- WEB3 ---
   'transfer': { 
     label: 'Transfer Token', category: 'web3', icon: Send,
     inputs: [
       { name: 'toAddress', label: 'To Address', type: 'text', placeholder: '0x... or {{Wallet}}' },
       { name: 'amount', label: 'Amount', type: 'text', placeholder: '1.5' },
       { name: 'currency', label: 'Token Symbol', type: 'text', placeholder: 'ETH, USDC...' },
-      { name: 'decimals', label: 'Decimals (Optional)', type: 'number', placeholder: '18' },
+      // Optional: Backend defaults to 18 if missing
+      { name: 'decimals', label: 'Decimals (Opt)', type: 'number', placeholder: '18', required: false },
     ]
   },
   'swap_uniswap': { 
     label: 'Uniswap Swap', category: 'web3', icon: ArrowRightLeft,
     inputs: [
-      { name: 'tokenIn', label: 'Token In (Addr)', type: 'text', placeholder: '0x...' },
-      { name: 'tokenOut', label: 'Token Out (Addr)', type: 'text', placeholder: '0x...' },
-      { name: 'amountIn', label: 'Amount In', type: 'text', placeholder: '100' },
+      { name: 'tokenIn', label: 'Token In', type: 'text', placeholder: '0x...' },
+      { name: 'tokenOut', label: 'Token Out', type: 'text', placeholder: '0x...' },
+      { name: 'amountIn', label: 'Amount', type: 'text', placeholder: '100' },
       { name: 'recipient', label: 'Recipient', type: 'text', placeholder: '0x...' },
-      { name: 'tokenInDecimals', label: 'In Decimals', type: 'number', placeholder: '18' },
+      { name: 'tokenInDecimals', label: 'In Decimals', type: 'number', placeholder: '18', required: false },
     ]
   },
   'aave_supply': { 
@@ -51,23 +57,23 @@ export const NODE_TYPES: Record<string, any> = {
       { name: 'onBehalfOf', label: 'On Behalf Of', type: 'text', placeholder: '0x...' },
     ]
   },
-
-  // 3. GENERIC CHAIN TOOLS
   'read_contract': { 
     label: 'Read Contract', category: 'web3', icon: Search,
     inputs: [
-      { name: 'contractAddress', label: 'Contract Address', type: 'text' },
+      { name: 'contractAddress', label: 'Contract', type: 'text' },
       { name: 'functionSignature', label: 'Function Sig', type: 'text', placeholder: 'balanceOf(address)' },
-      { name: 'args', label: 'Arguments (Comma Sep)', type: 'text', placeholder: '0x123, 5' },
+      // Optional: Functions like totalSupply() have no args
+      { name: 'args', label: 'Args (Comma Sep)', type: 'text', placeholder: '0x123', required: false },
     ]
   },
   'write_contract': { 
     label: 'Write Contract', category: 'web3', icon: Fingerprint,
     inputs: [
-      { name: 'contractAddress', label: 'Contract Address', type: 'text' },
+      { name: 'contractAddress', label: 'Contract', type: 'text' },
       { name: 'functionSignature', label: 'Function Sig', type: 'text', placeholder: 'approve(address,uint256)' },
-      { name: 'args', label: 'Arguments', type: 'text' },
-      { name: 'value', label: 'ETH Value (Wei)', type: 'text', placeholder: '0' },
+      { name: 'args', label: 'Args (Comma Sep)', type: 'text', required: false },
+      // Optional: Non-payable functions don't need value
+      { name: 'value', label: 'ETH Value (Wei)', type: 'text', placeholder: '0', required: false },
     ]
   },
   'resolve_ens': { 
@@ -76,21 +82,22 @@ export const NODE_TYPES: Record<string, any> = {
   },
   'get_gas_price': { 
     label: 'Get Gas Price', category: 'data', icon: Flame,
-    inputs: [] // No inputs needed, just outputs GAS_PRICE_GWEI
+    inputs: [] 
   },
 
-  // 4. DATA & UTILS
+  // --- DATA ---
   'get_price': { 
     label: 'Get Token Price', category: 'data', icon: Database,
-    inputs: [{ name: 'tokenId', label: 'Coingecko ID', type: 'text', placeholder: 'ethereum, bitcoin' }] 
+    inputs: [{ name: 'tokenId', label: 'Coingecko ID', type: 'text', placeholder: 'ethereum' }] 
   },
   'http_request': { 
     label: 'HTTP Request', category: 'data', icon: Globe,
     inputs: [
-      { name: 'url', label: 'URL', type: 'text', placeholder: 'https://api.example.com' },
+      { name: 'url', label: 'URL', type: 'text' },
       { name: 'method', label: 'Method', type: 'select', options: ['GET', 'POST', 'PUT', 'DELETE'] },
-      { name: 'body', label: 'Body (JSON)', type: 'textarea' },
-      { name: 'headers', label: 'Headers (JSON)', type: 'textarea' },
+      // Optional: GET requests often have no body
+      { name: 'body', label: 'Body (JSON)', type: 'textarea', required: false },
+      { name: 'headers', label: 'Headers (JSON)', type: 'textarea', required: false },
     ]
   },
   'read_rss': { 
@@ -98,7 +105,7 @@ export const NODE_TYPES: Record<string, any> = {
     inputs: [{ name: 'url', label: 'RSS URL', type: 'text' }] 
   },
 
-  // 5. LOGIC & TRANSFORMATION
+  // --- LOGIC ---
   'math_operation': { 
     label: 'Math Operator', category: 'logic', icon: Calculator,
     inputs: [
@@ -108,35 +115,37 @@ export const NODE_TYPES: Record<string, any> = {
     ]
   },
   'transform_data': { 
-    label: 'Transform Text', category: 'logic', icon: Variable,
+    label: 'Transform Data', category: 'logic', icon: Variable,
     inputs: [
       { name: 'value', label: 'Input Value', type: 'text' },
       { name: 'operation', label: 'Operation', type: 'select', options: ['upper', 'lower', 'replace', 'parse_number'] },
-      { name: 'param', label: 'Param (e.g. search text)', type: 'text' },
-      { name: 'replaceValue', label: 'Replace With', type: 'text' },
+      // Optional: 'upper'/'lower' need no param
+      { name: 'param', label: 'Param (e.g. search)', type: 'text', required: false },
+      { name: 'replaceValue', label: 'Replace With', type: 'text', required: false },
     ]
   },
   'json_extract': { 
     label: 'JSON Extractor', category: 'logic', icon: FileJson,
     inputs: [
       { name: 'data', label: 'JSON Data', type: 'text', placeholder: '{{HTTP_RESPONSE}}' },
-      { name: 'path', label: 'Path', type: 'text', placeholder: 'data.items.0.price' },
-      { name: 'outputVar', label: 'Output Alias', type: 'text', placeholder: 'MY_PRICE' },
+      { name: 'path', label: 'Path', type: 'text', placeholder: 'data.price' },
+      // Optional: Backend has a default output name
+      { name: 'outputVar', label: 'Output Alias', type: 'text', placeholder: 'MY_VAR', required: false },
     ]
   },
   'format_date': { 
     label: 'Format Date', category: 'logic', icon: Calendar,
     inputs: [
-      { name: 'value', label: 'Date/Timestamp', type: 'text' },
-      { name: 'format', label: 'Format', type: 'text', placeholder: 'YYYY-MM-DD HH:mm' },
+      { name: 'value', label: 'Timestamp', type: 'text' },
+      { name: 'format', label: 'Format', type: 'text', placeholder: 'YYYY-MM-DD', required: false },
     ]
   },
 
-  // 6. NOTIFICATIONS & OPS
+  // --- NOTIFY & OPS ---
   'discord_notify': { 
     label: 'Discord Msg', category: 'notify', icon: MessageSquare,
     inputs: [
-      { name: 'webhookUrl', label: 'Webhook URL', type: 'text' },
+      { name: 'webhookUrl', label: 'Webhook URL', type: 'password' },
       { name: 'message', label: 'Message', type: 'textarea' },
     ]
   },
@@ -154,7 +163,7 @@ export const NODE_TYPES: Record<string, any> = {
       { name: 'to', label: 'To Email', type: 'text' },
       { name: 'subject', label: 'Subject', type: 'text' },
       { name: 'body', label: 'Body', type: 'textarea' },
-      { name: 'smtpHost', label: 'SMTP Host', type: 'text', placeholder: 'smtp.gmail.com' },
+      { name: 'smtpHost', label: 'SMTP Host', type: 'text' },
       { name: 'smtpUser', label: 'SMTP User', type: 'text' },
       { name: 'smtpPass', label: 'SMTP Pass', type: 'password' },
     ]
@@ -162,8 +171,8 @@ export const NODE_TYPES: Record<string, any> = {
   'update_row': { 
     label: 'Update G-Sheet', category: 'ops', icon: FileSpreadsheet,
     inputs: [
-      { name: 'colIndex', label: 'Column Index (0=A)', type: 'number' },
-      { name: 'value', label: 'Value to Write', type: 'text' },
+      { name: 'colIndex', label: 'Col Index (0=A)', type: 'number', placeholder: '5' },
+      { name: 'value', label: 'Value to Write', type: 'text', placeholder: 'Done' },
     ]
   },
 };

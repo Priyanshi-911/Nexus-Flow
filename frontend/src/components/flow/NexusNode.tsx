@@ -9,10 +9,19 @@ const NexusNode = ({ data, selected }: NodeProps) => {
   const colors = CATEGORY_COLORS[config.category] || CATEGORY_COLORS.logic;
   const Icon = config.icon;
 
+  // --- ROBUST VALIDATION LOGIC ---
   const isValid = useMemo(() => {
+    // 1. If node has no inputs (like Get Gas Price), it's always valid
     if (!config.inputs) return true;
+
     return config.inputs.every((input: any) => {
+      // 2. Skip Read-Only fields (like Trigger ID which is auto-generated)
       if (input.readOnly) return true;
+
+      // 3. Skip Optional Fields (Crucial for robust UX)
+      if (input.required === false) return true;
+
+      // 4. Check if value exists and is not empty string
       const val = data.config?.[input.name];
       return val !== undefined && val !== null && val.toString().trim() !== "";
     });
@@ -21,6 +30,7 @@ const NexusNode = ({ data, selected }: NodeProps) => {
   const onTestClick = (e: React.MouseEvent) => {
     e.stopPropagation();
     console.log(`🚀 Testing Node [${data.label}]...`, data.config);
+    // Future: Trigger single node execution via API
   };
 
   return (
@@ -28,15 +38,17 @@ const NexusNode = ({ data, selected }: NodeProps) => {
       className={`
         relative shadow-xl rounded-xl border-2 min-w-[240px] bg-white transition-all duration-200 group
         ${selected ? "ring-2 ring-indigo-500 border-indigo-500 scale-105 z-10" : ""}
-        ${!isValid ? "border-red-400 ring-2 ring-red-50" : colors.border}
+        ${!isValid ? "border-red-400 ring-2 ring-red-100" : colors.border}
       `}
     >
+      {/* Error Badge */}
       {!isValid && (
         <div className="absolute -top-3 -right-3 z-20 bg-red-500 text-white p-1 rounded-full shadow-md animate-bounce">
           <AlertCircle size={16} />
         </div>
       )}
 
+      {/* Header */}
       <div
         className={`
         px-4 py-2 rounded-t-lg border-b flex items-center justify-between 
@@ -56,6 +68,7 @@ const NexusNode = ({ data, selected }: NodeProps) => {
         </div>
 
         <div className="flex items-center gap-2">
+          {/* Test Button (Show only if valid and not a trigger) */}
           {isValid && config.category !== "trigger" && (
             <button
               className="p-1 rounded hover:bg-white/50 text-slate-500 hover:text-indigo-600 transition-colors"
@@ -66,6 +79,7 @@ const NexusNode = ({ data, selected }: NodeProps) => {
             </button>
           )}
 
+          {/* Status Dot */}
           {isValid ? (
             <div className="w-2 h-2 rounded-full bg-green-400 shadow-[0_0_8px_rgba(74,222,128,0.6)]" />
           ) : (
@@ -74,6 +88,7 @@ const NexusNode = ({ data, selected }: NodeProps) => {
         </div>
       </div>
 
+      {/* Body */}
       <div className="p-4 bg-white rounded-b-lg relative">
         <div className="flex justify-between items-center mb-2">
           <div className="text-[10px] text-gray-400 font-mono uppercase tracking-wide">
@@ -90,6 +105,7 @@ const NexusNode = ({ data, selected }: NodeProps) => {
         </div>
       </div>
 
+      {/* Handles */}
       {config.category !== "trigger" && (
         <Handle
           type="target"

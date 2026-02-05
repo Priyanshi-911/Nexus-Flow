@@ -16,6 +16,8 @@ import ReactFlow, {
   MarkerType,
 } from "reactflow";
 import "reactflow/dist/style.css";
+// 1. Import Sonner
+import { Toaster, toast } from "sonner";
 
 import {
   Save,
@@ -55,6 +57,8 @@ export default function NexusFlowPage() {
   return (
     <ReactFlowProvider>
       <NexusCanvas />
+      {/* 2. Add the Toaster Component globally */}
+      <Toaster richColors position="bottom-right" closeButton />
     </ReactFlowProvider>
   );
 }
@@ -125,16 +129,22 @@ function NexusCanvas() {
   // --- HANDLERS ---
 
   const handleDeploy = async () => {
-    // REMOVED: The blocking check for spreadsheetId.
-    // We now allow deployment even if ID is empty (for Webhook-only flows).
+    // 3. Use Toast instead of Alert
+    const promise = deploy(globalSettings.name, globalSettings);
 
-    const result = await deploy(globalSettings.name, globalSettings);
+    const result = await promise;
 
     if (result.success) {
-      alert("✅ Deployment Successful!");
+      toast.success("Deployment Successful!", {
+        description: "Your agent is active and listening for events.",
+        duration: 4000,
+      });
       console.log("Server Response:", result.data);
     } else {
-      alert(`❌ Deployment Failed: ${result.error}`);
+      toast.error("Deployment Failed", {
+        description: result.error || "An unknown error occurred.",
+        duration: 5000,
+      });
     }
   };
 
