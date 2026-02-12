@@ -2,15 +2,18 @@ import React, { memo, useMemo } from "react";
 import { Handle, Position, NodeProps } from "reactflow";
 import { AlertCircle, Play, GitMerge } from "lucide-react";
 import { NODE_TYPES, CATEGORY_COLORS } from "@/lib/nodeConfig";
+// 1. Import the hook
+import { useFlowContext } from "./FlowContext";
 
 const NexusNode = ({ data, selected }: NodeProps) => {
-  // 1. Resolve Config & Styles
+  // 2. Consume the state
+  const { isCompact } = useFlowContext();
+
   const type = data.type || "webhook";
   const config = NODE_TYPES[type] || NODE_TYPES["math_operation"];
   const colors = CATEGORY_COLORS[config.category] || CATEGORY_COLORS.logic;
   const Icon = config.icon;
 
-  // 2. Smart Validation Logic
   const isValid = useMemo(() => {
     if (!config.inputs) return true;
     return config.inputs.every((input: any) => {
@@ -26,47 +29,35 @@ const NexusNode = ({ data, selected }: NodeProps) => {
     console.log(`🚀 Testing Node [${data.label}]...`, data.config);
   };
 
-  // --- SPECIAL RENDER: MERGE NODE (CIRCLE) ---
+  const handleClasses =
+    "w-2 h-2 rounded-full border border-white transition-all duration-200";
+
+  // --- SPECIAL RENDER: MERGE NODE (Always Circle) ---
   if (type === "merge") {
     return (
       <div
         className={`
-          relative w-12 h-12 -top-1.5 rounded-full bg-white border-2 shadow-md transition-all duration-200 group
+          relative w-12 h-12 rounded-full bg-white border-2 shadow-md transition-all duration-200 group
           ${selected ? "ring-2 ring-indigo-500 border-indigo-500 scale-110 z-10" : "border-slate-300"}
           hover:shadow-lg hover:border-indigo-400
         `}
         title="Merge / Wait"
       >
-        {/* Icon Centering */}
         <div className="absolute inset-0 flex items-center justify-center text-slate-600">
           {Icon ? <Icon size={20} /> : <GitMerge size={20} />}
         </div>
-
-        {/* Input Handle - Fixed Alignment to match Rectangular nodes (-9px) */}
         <Handle
           type="target"
           position={Position.Left}
           className="!w-3 !h-3 !border-2 !border-white !bg-indigo-400 hover:scale-125 transition-transform absolute"
-          style={{
-            top: "50%",
-            transform: "translate(-50%, -50%)",
-            left: -9, // Changed from -1 to -9 to stick out matching others
-          }}
+          style={{ top: "50%", transform: "translate(-50%, -50%)", left: -9 }}
         />
-
-        {/* Output Handle - Fixed Alignment */}
         <Handle
           type="source"
           position={Position.Right}
           className="!w-3 !h-3 !border-2 !border-white !bg-indigo-400 hover:scale-125 transition-transform absolute"
-          style={{
-            top: "50%",
-            transform: "translate(50%, -50%)",
-            right: -9, // Changed from -1 to -9
-          }}
+          style={{ top: "50%", transform: "translate(50%, -50%)", right: -9 }}
         />
-
-        {/* Label (Floating below) */}
         <div className="absolute -bottom-6 w-32 text-center left-1/2 -translate-x-1/2 text-[9px] font-bold text-slate-400 uppercase tracking-wider opacity-0 group-hover:opacity-100 transition-opacity">
           Merge
         </div>
@@ -74,7 +65,89 @@ const NexusNode = ({ data, selected }: NodeProps) => {
     );
   }
 
-  // --- STANDARD RENDER: RECTANGULAR CARD ---
+  // --- VIEW 1: COMPACT ICON STYLE ---
+  if (isCompact) {
+    return (
+      <div className="relative group flex flex-col items-center">
+        <div
+          className={`
+            relative w-12 h-12 flex items-center justify-center rounded-2xl bg-white shadow-sm transition-all duration-300 ease-out z-10
+            ${selected ? "ring-2 ring-indigo-500 ring-offset-2 border-transparent scale-105" : "border border-slate-200 hover:border-indigo-300 hover:shadow-md hover:-translate-y-0.5"}
+            ${!isValid ? "!border-red-400" : ""}
+          `}
+        >
+          <div
+            className={`transition-colors duration-300 ${isValid ? colors.text : "text-red-400"}`}
+          >
+            <Icon size={20} strokeWidth={1.5} />
+          </div>
+          {!isValid && (
+            <div className="absolute -top-1 -right-1 bg-red-500 text-white rounded-full p-0.5 border-2 border-white shadow-sm">
+              <AlertCircle size={8} />
+            </div>
+          )}
+        </div>
+
+        {/* Floating Label */}
+        <div
+          className={`absolute top-14 text-[10px] font-medium text-center whitespace-nowrap px-2 py-0.5 rounded-md transition-all duration-200 ${selected ? "text-indigo-600 bg-indigo-50" : "text-slate-400 group-hover:text-slate-600 group-hover:bg-white/50"}`}
+        >
+          {data.config?.description || config.label}
+        </div>
+
+        {/* Compact Handles */}
+        {config.category !== "trigger" && (
+          <Handle
+            type="target"
+            position={Position.Left}
+            className={`${handleClasses} !bg-slate-300 group-hover:!bg-indigo-400`}
+            style={{ left: -4 }}
+          />
+        )}
+        {type === "condition" ? (
+          <>
+            <div className="absolute -right-[4px] top-[25%]">
+              <Handle
+                id="true"
+                type="source"
+                position={Position.Right}
+                className={`${handleClasses} !bg-emerald-400`}
+                style={{
+                  right: 0,
+                  top: 0,
+                  position: "relative",
+                  transform: "none",
+                }}
+              />
+            </div>
+            <div className="absolute -right-[4px] top-[75%]">
+              <Handle
+                id="false"
+                type="source"
+                position={Position.Right}
+                className={`${handleClasses} !bg-rose-400`}
+                style={{
+                  right: 0,
+                  top: 0,
+                  position: "relative",
+                  transform: "none",
+                }}
+              />
+            </div>
+          </>
+        ) : (
+          <Handle
+            type="source"
+            position={Position.Right}
+            className={`${handleClasses} !bg-slate-300 group-hover:!bg-indigo-400`}
+            style={{ right: -4 }}
+          />
+        )}
+      </div>
+    );
+  }
+
+  // --- VIEW 2: FULL CARD STYLE ---
   return (
     <div
       className={`
@@ -83,20 +156,15 @@ const NexusNode = ({ data, selected }: NodeProps) => {
         ${!isValid ? "border-red-400 ring-2 ring-red-100" : colors.border}
       `}
     >
-      {/* Validation Error Badge */}
       {!isValid && (
         <div className="absolute -top-3 -right-3 z-20 bg-red-500 text-white p-1 rounded-full shadow-md animate-bounce">
           <AlertCircle size={16} />
         </div>
       )}
 
-      {/* Header Section */}
+      {/* Header */}
       <div
-        className={`
-        px-4 py-2 rounded-t-lg border-b flex items-center justify-between 
-        ${colors.bg} 
-        ${isValid ? colors.border : "border-red-100"}
-      `}
+        className={`px-4 py-2 rounded-t-lg border-b flex items-center justify-between ${colors.bg} ${isValid ? colors.border : "border-red-100"}`}
       >
         <div className="flex items-center gap-2">
           <div className={`p-1.5 rounded-md bg-white/60 ${colors.text}`}>
@@ -108,7 +176,6 @@ const NexusNode = ({ data, selected }: NodeProps) => {
             {config.label}
           </span>
         </div>
-
         <div className="flex items-center gap-2">
           {isValid && config.category !== "trigger" && (
             <button
@@ -119,7 +186,6 @@ const NexusNode = ({ data, selected }: NodeProps) => {
               <Play size={10} fill="currentColor" />
             </button>
           )}
-
           {isValid ? (
             <div className="w-2 h-2 rounded-full bg-green-400 shadow-[0_0_8px_rgba(74,222,128,0.6)]" />
           ) : (
@@ -128,14 +194,13 @@ const NexusNode = ({ data, selected }: NodeProps) => {
         </div>
       </div>
 
-      {/* Body / Content Section */}
+      {/* Content */}
       <div className="p-4 bg-white rounded-b-lg relative">
         <div className="flex justify-between items-center mb-2">
           <div className="text-[10px] text-gray-400 font-mono uppercase tracking-wide">
             ID: {data.label}
           </div>
         </div>
-
         <div
           className={`text-xs font-medium truncate ${!isValid ? "text-red-400 italic" : "text-slate-600"}`}
         >
@@ -145,20 +210,17 @@ const NexusNode = ({ data, selected }: NodeProps) => {
         </div>
       </div>
 
-      {/* --- CONNECTION HANDLES --- */}
+      {/* Handles */}
       {config.category !== "trigger" && (
         <Handle
           type="target"
           position={Position.Left}
           className="!w-3 !h-3 !border-2 !border-white transition-transform duration-200 hover:scale-125"
-          // Ensure this matches the circle offset
           style={{ backgroundColor: getHandleColor(config.category), left: -9 }}
         />
       )}
-
       {type === "condition" ? (
         <>
-          {/* True Handle */}
           <div className="absolute -right-[9px] top-1/2 -translate-y-4 flex items-center group/true">
             <span className="text-[9px] font-bold text-green-600 mr-2 bg-white/90 px-1 rounded opacity-0 group-hover/true:opacity-100 transition-opacity pointer-events-none">
               TRUE
@@ -171,7 +233,6 @@ const NexusNode = ({ data, selected }: NodeProps) => {
               style={{ top: 0, transform: "none", right: 0 }}
             />
           </div>
-          {/* False Handle */}
           <div className="absolute -right-[9px] top-1/2 translate-y-4 flex items-center group/false">
             <span className="text-[9px] font-bold text-red-500 mr-2 bg-white/90 px-1 rounded opacity-0 group-hover/false:opacity-100 transition-opacity pointer-events-none">
               FALSE
@@ -190,7 +251,6 @@ const NexusNode = ({ data, selected }: NodeProps) => {
           type="source"
           position={Position.Right}
           className="!w-3 !h-3 !border-2 !border-white transition-transform duration-200 hover:scale-125"
-          // Ensure this matches the circle offset
           style={{
             backgroundColor: getHandleColor(config.category),
             right: -9,
@@ -201,7 +261,6 @@ const NexusNode = ({ data, selected }: NodeProps) => {
   );
 };
 
-// Helper: Determine Handle color based on Node Category
 const getHandleColor = (category: string) => {
   switch (category) {
     case "trigger":

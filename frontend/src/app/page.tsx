@@ -1,6 +1,12 @@
 "use client";
 
-import React, { useState, useCallback, useRef, useEffect } from "react";
+import React, {
+  useState,
+  useCallback,
+  useRef,
+  useEffect,
+  useContext,
+} from "react";
 import ReactFlow, {
   Controls,
   MiniMap,
@@ -16,7 +22,6 @@ import ReactFlow, {
   MarkerType,
 } from "reactflow";
 import "reactflow/dist/style.css";
-// 1. Import Sonner
 import { Toaster, toast } from "sonner";
 
 import {
@@ -27,7 +32,10 @@ import {
   Search,
   Loader2,
   Settings,
+  LayoutGrid, // Import Icon
+  LayoutList, // Import Icon
 } from "lucide-react";
+
 import NexusNode from "@/components/flow/NexusNode";
 import PropertiesPanel from "@/components/PropertiesPanel";
 import ContextMenu from "@/components/flow/ContextMenu";
@@ -36,8 +44,9 @@ import SettingsModal from "@/components/SettingsModal";
 import { useUndoRedo } from "@/hooks/useUndoRedo";
 import { useDeployment } from "@/hooks/useDeployment";
 import { NODE_TYPES, CATEGORY_COLORS } from "@/lib/nodeConfig";
+// 1. Import Context
+import { FlowContext } from "@/components/flow/FlowContext";
 
-// Register custom node types
 const nodeTypes = { nexusNode: NexusNode };
 
 const INITIAL_NODES: Node[] = [
@@ -54,19 +63,26 @@ const INITIAL_NODES: Node[] = [
 ];
 
 const CATEGORY_HEX: Record<string, string> = {
-  trigger: "#f59e0b", // amber-500
-  web3: "#3F51B5", // indigo-500
-  data: "#10b981", // emerald-500
-  logic: "#64748b", // slate-500
-  notify: "#f43f5e", // rose-500
-  ops: "#3b82f6", // blue-500
+  trigger: "#f59e0b",
+  web3: "#3b82f6",
+  data: "#10b981",
+  logic: "#64748b",
+  notify: "#f43f5e",
+  ops: "#3b82f6",
 };
 
 export default function NexusFlowPage() {
+  // 2. Manage View State Here
+  const [isCompact, setIsCompact] = useState(false);
+
   return (
     <ReactFlowProvider>
-      <NexusCanvas />
-      {/* 2. Add the Toaster Component globally */}
+      {/* 3. Wrap Canvas in Context Provider */}
+      <FlowContext.Provider
+        value={{ isCompact, toggleCompact: () => setIsCompact(!isCompact) }}
+      >
+        <NexusCanvas />
+      </FlowContext.Provider>
       <Toaster richColors position="bottom-right" closeButton />
     </ReactFlowProvider>
   );
@@ -76,39 +92,30 @@ function NexusCanvas() {
   const reactFlowWrapper = useRef<HTMLDivElement>(null);
   const ref = useRef<HTMLDivElement>(null);
 
-  // React Flow State
   const [nodes, setNodes, onNodesChange] = useNodesState(INITIAL_NODES);
   const [edges, setEdges, onEdgesChange] = useEdgesState([]);
   const { screenToFlowPosition } = useReactFlow();
 
-  // UI State
   const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null);
   const [menu, setMenu] = useState<any>(null);
   const [searchTerm, setSearchTerm] = useState("");
 
-  // --- Deployment & Settings State ---
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [globalSettings, setGlobalSettings] = useState({
     name: "My Workflow",
     spreadsheetId: "",
   });
   const { deploy, isDeploying } = useDeployment();
-
-  // Undo/Redo Hook
   const { takeSnapshot, undo, redo } = useUndoRedo(nodes, edges);
 
-  // Global Canvas Settings
-  const [defaultEdgeType, setDefaultEdgeType] = useState<
-    "smoothstep" | "default" | "straight"
-  >("smoothstep");
-  const [defaultEdgePattern, setDefaultEdgePattern] = useState<
-    "solid" | "dashed" | "dotted"
-  >("solid");
+  const [defaultEdgeType, setDefaultEdgeType] = useState<any>("smoothstep");
+  const [defaultEdgePattern, setDefaultEdgePattern] = useState<any>("solid");
 
-  // --- KEYBOARD SHORTCUTS (Undo/Redo) ---
+  // 4. Consume Context
+  const { isCompact, toggleCompact } = useContext(FlowContext);
+
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
-      // Undo: Ctrl+Z
       if ((e.ctrlKey || e.metaKey) && e.key === "z" && !e.shiftKey) {
         e.preventDefault();
         const state = undo(nodes, edges);
@@ -117,7 +124,6 @@ function NexusCanvas() {
           setEdges(state.edges);
         }
       }
-      // Redo: Ctrl+Y or Ctrl+Shift+Z
       if (
         (e.ctrlKey || e.metaKey) &&
         (e.key === "y" || (e.key === "z" && e.shiftKey))
@@ -130,17 +136,12 @@ function NexusCanvas() {
         }
       }
     };
-
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
   }, [undo, redo, nodes, edges, setNodes, setEdges]);
 
-  // --- HANDLERS ---
-
   const handleDeploy = async () => {
-    // 3. Use Toast instead of Alert
     const promise = deploy(globalSettings.name, globalSettings);
-
     const result = await promise;
 
     if (result.success) {
@@ -168,7 +169,7 @@ function NexusCanvas() {
 
   const onConnect = useCallback(
     (params: Connection | Edge) => {
-      takeSnapshot(nodes, edges); // Snapshot before connecting
+      takeSnapshot(nodes, edges);
       setEdges((eds) =>
         addEdge(
           {
@@ -210,8 +211,7 @@ function NexusCanvas() {
       const type = event.dataTransfer.getData("application/reactflow");
       if (!type) return;
 
-      takeSnapshot(nodes, edges); // Snapshot before drop
-
+      takeSnapshot(nodes, edges);
       const position = screenToFlowPosition({
         x: event.clientX,
         y: event.clientY,
@@ -227,7 +227,6 @@ function NexusCanvas() {
           config: {},
         },
       };
-
       setNodes((nds) => nds.concat(newNode));
     },
     [nodes, setNodes, screenToFlowPosition, takeSnapshot, edges],
@@ -253,12 +252,9 @@ function NexusCanvas() {
           config: {},
         },
       };
-
       setNodes((nds) => nds.concat(newNode));
     }
   };
-
-  // --- CONTEXT MENU HANDLERS ---
 
   const onNodeContextMenu = useCallback(
     (event: React.MouseEvent, node: Node) => {
@@ -306,8 +302,6 @@ function NexusCanvas() {
     }
   }, []);
 
-  // --- ACTION HELPERS ---
-
   const duplicateNode = (id: string) => {
     takeSnapshot(nodes, edges);
     const node = nodes.find((n) => n.id === id);
@@ -329,7 +323,10 @@ function NexusCanvas() {
         if (node.id === id) {
           return {
             ...node,
-            data: { ...node.data, config: { ...node.data.config, ...newData } },
+            data: {
+              ...node.data,
+              config: { ...node.data.config, ...newData },
+            },
           };
         }
         return node;
@@ -367,8 +364,6 @@ function NexusCanvas() {
     if (type) setDefaultEdgeType(type);
     if (pattern) setDefaultEdgePattern(pattern);
   };
-
-  // --- RENDER ---
 
   return (
     <div className="flex h-screen w-full bg-slate-50 font-sans overflow-hidden">
@@ -475,7 +470,34 @@ function NexusCanvas() {
               <Settings size={14} />
             </button>
           </div>
+
           <div className="flex gap-3 relative">
+            {/* 5. ADDED VIEW TOGGLE BUTTONS */}
+            <div className="flex bg-slate-100 p-1 rounded-lg border border-slate-200 mr-2">
+              <button
+                onClick={() => isCompact && toggleCompact()}
+                className={`p-1.5 rounded-md transition-all ${
+                  !isCompact
+                    ? "bg-white text-indigo-600 shadow-sm"
+                    : "text-slate-400 hover:text-slate-600"
+                }`}
+                title="Card View"
+              >
+                <LayoutGrid size={16} />
+              </button>
+              <button
+                onClick={() => !isCompact && toggleCompact()}
+                className={`p-1.5 rounded-md transition-all ${
+                  isCompact
+                    ? "bg-white text-indigo-600 shadow-sm"
+                    : "text-slate-400 hover:text-slate-600"
+                }`}
+                title="Icon View"
+              >
+                <LayoutList size={16} />
+              </button>
+            </div>
+
             <button
               onClick={() => setIsSettingsOpen(true)}
               className="flex items-center gap-2 px-4 py-2 text-indigo-600 bg-indigo-50 border border-indigo-200 rounded-lg text-sm font-bold hover:bg-indigo-100 transition-colors"
@@ -483,7 +505,9 @@ function NexusCanvas() {
               <Save size={16} /> Settings
             </button>
             <button
-              className={`flex items-center gap-2 px-6 py-2 bg-indigo-600 text-white rounded-lg text-sm font-bold shadow-lg shadow-indigo-200 hover:bg-indigo-700 transition-all transform hover:scale-105 ${isDeploying ? "opacity-70 cursor-wait" : ""}`}
+              className={`flex items-center gap-2 px-6 py-2 bg-indigo-600 text-white rounded-lg text-sm font-bold shadow-lg shadow-indigo-200 hover:bg-indigo-700 transition-all transform hover:scale-105 ${
+                isDeploying ? "opacity-70 cursor-wait" : ""
+              }`}
               onClick={handleDeploy}
               disabled={isDeploying}
             >
@@ -526,7 +550,6 @@ function NexusCanvas() {
               zoomable
               pannable
               nodeColor={(n) => {
-                // Dynamically look up the category and use our Hex Map
                 const type = n.data?.type;
                 const config = NODE_TYPES[type];
                 const category = config?.category;
@@ -550,7 +573,6 @@ function NexusCanvas() {
             )}
           </ReactFlow>
 
-          {/* Live Logs Terminal */}
           <LiveLogs />
         </div>
       </div>
@@ -562,7 +584,7 @@ function NexusCanvas() {
           updateData={updateNodeData}
           onClose={() => setSelectedNodeId(null)}
           globalSettings={globalSettings}
-          nodes={nodes} // <--- NEW: Pass the full nodes array
+          nodes={nodes}
         />
       )}
 
