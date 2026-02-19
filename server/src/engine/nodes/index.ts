@@ -19,6 +19,7 @@ import { readRSS } from "./rssReader.js";
 import { getAaveSupply } from "./aaveSupply.js";
 import { httpScraper } from "./httpScraper.js";
 import { walletBalance } from "./walletBalance.js";
+import { geminiPrompt } from "./geminiPrompt.js";
 
 export const NODE_REGISTRY: Record<string, Function> = {
     "transfer": transfer,    
@@ -41,5 +42,6 @@ export const NODE_REGISTRY: Record<string, Function> = {
     "read_rss": readRSS,
     "aave_supply": getAaveSupply,
     "http_scraper": httpScraper,
-    "wallet_balance": walletBalance
+    "wallet_balance": walletBalance,
+    "gemini_prompt": geminiPrompt
 };
