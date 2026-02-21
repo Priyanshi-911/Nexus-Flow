@@ -1,62 +1,120 @@
 import { resolveVariable, type ExecutionContext } from "../variableResolver.js";
-import { createNexusAccount, sendTestTransaction } from "../smartAccount.js";
-import { validateBalance } from "../guardRails.js";
+import { createNexusAccount } from "../smartAccount.js";
 import { Sanitize } from "../utils/inputSanitizer.js";
+import { KNOWN_TOKENS } from "../utils/tokenRegistry.js";
+import { createPublicClient, http, parseAbi, encodeFunctionData, parseUnits, formatUnits } from "viem";
+import { sepolia } from "viem/chains";
 
 type ActionInput = Record<string, any>;
 
 export const transfer = async (inputs: ActionInput, context: ExecutionContext) => {
-    const to = Sanitize.address(resolveVariable(inputs.toAddress, context));
+    // 1. Resolve Frontend Selections
+    const toRaw = resolveVariable(inputs.toAddress, context);
+    const toAddress = Sanitize.address(toRaw);
     const rawAmt = resolveVariable(inputs.amount, context);
-    const amt = Sanitize.number(rawAmt);
-    const curr = resolveVariable(inputs.currency, context);
-    const name = resolveVariable(inputs.name, context);
+    const amount = Sanitize.number(rawAmt);
+    const selectedToken = resolveVariable(inputs.currency, context);
 
-    let decimals = 18;
-    if (Sanitize.equals(curr, "USDC") || Sanitize.equals(curr, "USDT")) decimals = 6;
-    if (Sanitize.equals(curr, "WBTC")) decimals = 8;
-    if (inputs.decimals) decimals = Number(inputs.decimals);
-
-    console.log(`   ➡️ Transfer: Sending ${amt} ${curr} to ${name} (${to})`);
-
-    if (!to || !to.startsWith("0x")) {
-        console.error(`   ❌ Invalid Address. Skipping.`);
-        throw new Error(`Invalid Address: ${to}`);
+    if (!toAddress || !toAddress.startsWith("0x")) {
+        throw new Error(`Invalid Destination Address: ${toRaw}`);
     }
 
-    try {
-        const nexusClient = await createNexusAccount(0);
-        const accountAddress = nexusClient.account.address;
+    // 2. Map to Registry or Fallback to Custom
+    const tokenConfig = KNOWN_TOKENS[selectedToken] || {
+        address: resolveVariable(inputs.customToken, context),
+        decimals: 18, // Defaulting custom tokens to 18 decimals
+        isNative: false
+    };
+
+    const tokenAddress = Sanitize.address(tokenConfig.address);
+    const amountBigInt = parseUnits(amount.toString(), tokenConfig.decimals);
+
+    console.log(`   ➡️ Executing Transfer Node: Sending ${amount} ${selectedToken} to ${toAddress}...`);
+
+    // 3. Initialize the Smart Account
+    const nexusClient = await createNexusAccount(0);
+    const accountAddress = nexusClient.account.address;
+
+    // --- 🟢 PRE-FLIGHT BALANCE GUARDRAIL (WITH ACTIONABLE ERROR) ---
+    console.log(`      -> Verifying ${selectedToken} balance for ${accountAddress}...`);
+    
+    const publicClient = createPublicClient({ chain: sepolia, transport: http() });
+
+    let balance: bigint;
+    if (tokenConfig.isNative) {
+        balance = await publicClient.getBalance({ address: accountAddress as `0x${string}` });
+    } else {
+        const erc20Abi = parseAbi(["function balanceOf(address owner) view returns (uint256)"]);
+        balance = await publicClient.readContract({
+            address: tokenAddress as `0x${string}`,
+            abi: erc20Abi,
+            functionName: "balanceOf",
+            args: [accountAddress as `0x${string}`]
+        }) as bigint;
+    }
+
+    if (balance < amountBigInt) {
+        const missingAmountBigInt = amountBigInt - balance;
         
-        const check = await validateBalance(accountAddress, amt.toString(), curr);
-        if (!check.success) {
-            console.error(`   🛑 STOP: ${check.reason}`);
-            throw new Error(`Guard Rail Triggered: ${check.reason}`);
-        }
-
-        const response = await sendTestTransaction(nexusClient, to, amt.toString(), curr);
-        
-        if (typeof response === 'object' && response.success === false) {
-             throw new Error(`Transaction Execution Failed`);
-        }
-
-        const txHash = response.hash;
-        
-        // --- NEW: Generate Explorer Link ---
-        const explorerLink = `https://sepolia.etherscan.io/tx/${txHash}`;
-        console.log(`      🔗 View on Etherscan: ${explorerLink}`);
-
-        context["TX_HASH"] = txHash; 
-        console.log(`   ✅ Transaction complete: ${txHash}`);
-
-        return { 
-            "TX_HASH": txHash, 
-            "EXPLORER_LINK": explorerLink,
-            "STATUS": "Success" 
+        // Construct an Actionable Payload for the Frontend Deposit Modal
+        const errorPayload = {
+            code: "DEPOSIT_REQUIRED",
+            tokenSymbol: selectedToken,
+            tokenAddress: tokenAddress,
+            isNative: tokenConfig.isNative,
+            missingAmountRaw: missingAmountBigInt.toString(), 
+            missingAmountFormatted: formatUnits(missingAmountBigInt, tokenConfig.decimals),
+            accountAddress: accountAddress
         };
 
-    } catch (err: any) {
-        console.error(`   ❌ Transfer Failed: ${err.message}`);
-        return { "STATUS": "Failed", "ERROR": err.message };
+        // Throwing this prefix triggers the UI to intercept it instead of just showing a generic error
+        throw new Error(`[ACTION_REQUIRED] ${JSON.stringify(errorPayload)}`);
     }
-}
+    console.log(`      -> Balance verified! Building transaction...`);
+    // --- END GUARDRAIL ---
+
+    // 4. Construct the Transaction
+    const calls: any[] = [];
+
+    if (tokenConfig.isNative) {
+        // Native ETH Transfer
+        calls.push({
+            to: toAddress as `0x${string}`,
+            value: amountBigInt,
+            data: "0x"
+        });
+    } else {
+        // ERC-20 Transfer
+        const erc20Abi = parseAbi(["function transfer(address to, uint256 amount)"]);
+        const transferData = encodeFunctionData({
+            abi: erc20Abi,
+            functionName: "transfer",
+            args: [toAddress as `0x${string}`, amountBigInt]
+        });
+
+        calls.push({
+            to: tokenAddress as `0x${string}`,
+            value: 0n,
+            data: transferData
+        });
+    }
+
+    // 5. Execute via UserOperation
+    console.log(`      -> Sending UserOperation...`);
+    const userOpHash = await nexusClient.sendUserOperation({ calls });
+    
+    console.log(`      -> UserOp Sent (Hash: ${userOpHash}). Waiting for bundler...`);
+
+    const receipt = await nexusClient.waitForUserOperationReceipt({ hash: userOpHash });
+    const txHash = receipt.receipt.transactionHash;
+
+    const explorerLink = `https://sepolia.etherscan.io/tx/${txHash}`;
+    console.log(`      ✅ Transfer Complete! Hash: ${txHash}`);
+    console.log(`      🔗 View on Etherscan: ${explorerLink}`);
+
+    return { 
+        "TX_HASH": txHash,
+        "EXPLORER_LINK": explorerLink,
+        "STATUS": "Success"
+    };
+};

@@ -23,7 +23,7 @@ export const swapUniswap = async (inputs: ActionInput, context: ExecutionContext
     const tokenOutConfig = KNOWN_TOKENS[selectedTokenOut] || {
         address: resolveVariable(inputs.customTokenOut, context),
         decimals: 18,
-        isNative: false 
+        isNative: false
     };
 
     const tokenInAddress = Sanitize.address(tokenInConfig.address);
@@ -48,7 +48,7 @@ export const swapUniswap = async (inputs: ActionInput, context: ExecutionContext
     const nexusClient = await createNexusAccount(0);
     const accountAddress = nexusClient.account.address;
 
-    // --- 🟢 NEW: PRE-FLIGHT BALANCE GUARDRAIL ---
+    // --- 🟢 PRE-FLIGHT BALANCE GUARDRAIL (WITH ACTIONABLE ERROR) ---
     console.log(`      -> Verifying ${selectedTokenIn} balance for ${accountAddress}...`);
     
     const publicClient = createPublicClient({
@@ -56,25 +56,38 @@ export const swapUniswap = async (inputs: ActionInput, context: ExecutionContext
         transport: http()
     });
 
+    let balance: bigint;
+
     if (tokenInConfig.isNative) {
         // Check Native ETH balance
-        const balance = await publicClient.getBalance({ address: accountAddress as `0x${string}` });
-        if (balance < amountBigInt) {
-            throw new Error(`Insufficient ETH balance. Have: ${formatUnits(balance, 18)}, Need: ${amount}`);
-        }
+        balance = await publicClient.getBalance({ address: accountAddress as `0x${string}` });
     } else {
         // Check ERC-20 balance
         const erc20Abi = parseAbi(["function balanceOf(address owner) view returns (uint256)"]);
-        const balance = await publicClient.readContract({
+        balance = await publicClient.readContract({
             address: tokenInAddress as `0x${string}`,
             abi: erc20Abi,
             functionName: "balanceOf",
             args: [accountAddress as `0x${string}`]
         }) as bigint;
+    }
 
-        if (balance < amountBigInt) {
-            throw new Error(`Insufficient ${selectedTokenIn} balance. Have: ${formatUnits(balance, tokenInConfig.decimals)}, Need: ${amount}`);
-        }
+    if (balance < amountBigInt) {
+        const missingAmountBigInt = amountBigInt - balance;
+        
+        // Construct the Actionable Payload for the Frontend Modal
+        const errorPayload = {
+            code: "DEPOSIT_REQUIRED",
+            tokenSymbol: selectedTokenIn === 'Custom' ? 'Custom Token' : selectedTokenIn,
+            tokenAddress: tokenInAddress,
+            isNative: tokenInConfig.isNative,
+            missingAmountRaw: missingAmountBigInt.toString(), // Sent as string to preserve precision
+            missingAmountFormatted: formatUnits(missingAmountBigInt, tokenInConfig.decimals),
+            accountAddress: accountAddress
+        };
+
+        // Throw with a special prefix so the frontend can intercept it!
+        throw new Error(`[ACTION_REQUIRED] ${JSON.stringify(errorPayload)}`);
     }
     
     console.log(`      -> Balance verified! Proceeding with batch...`);
@@ -124,4 +137,4 @@ export const swapUniswap = async (inputs: ActionInput, context: ExecutionContext
         "EXPLORER_LINK": explorerLink,
         "STATUS": "Success"
     };
-};       
+};

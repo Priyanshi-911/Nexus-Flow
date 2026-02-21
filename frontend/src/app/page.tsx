@@ -44,6 +44,7 @@ import ContextMenu from "@/components/flow/ContextMenu";
 import LiveLogs from "@/components/LiveLogs";
 import SettingsModal from "@/components/SettingsModal";
 import ActiveSchedulesModal from "@/components/ActiveSchedulesModal";
+import DepositModal from "@/components/DepositModal"; // 🟢 NEW: Import Deposit Modal
 import { useUndoRedo } from "@/hooks/useUndoRedo";
 import { useDeployment } from "@/hooks/useDeployment";
 import { NODE_TYPES, CATEGORY_COLORS } from "@/lib/nodeConfig";
@@ -106,6 +107,11 @@ function NexusCanvas() {
 
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [isSchedulesOpen, setIsSchedulesOpen] = useState(false);
+
+  // 🟢 NEW: Deposit Modal State
+  const [isDepositModalOpen, setIsDepositModalOpen] = useState(false);
+  const [depositData, setDepositData] = useState<any>(null);
+
   const [globalSettings, setGlobalSettings] = useState({
     name: "My Workflow",
     spreadsheetId: "",
@@ -122,7 +128,7 @@ function NexusCanvas() {
 
   const { isCompact, toggleCompact } = useContext(FlowContext);
 
-  // --- 🟢 THE AUTO-SAVE / HOT RELOAD HOOK ---
+  // --- THE AUTO-SAVE / HOT RELOAD HOOK ---
   useEffect(() => {
     if (activeJobId && hotReload) {
       const timeoutId = setTimeout(() => {
@@ -160,6 +166,27 @@ function NexusCanvas() {
         return;
       }
 
+      // --- 🟢 NEW: INTERCEPT ACTIONABLE ERRORS BEFORE UPDATING NODES ---
+      if (
+        type === "node_failed" &&
+        error &&
+        typeof error === "string" &&
+        error.startsWith("[ACTION_REQUIRED]")
+      ) {
+        try {
+          const payloadStr = error.replace("[ACTION_REQUIRED] ", "");
+          const payload = JSON.parse(payloadStr);
+
+          if (payload.code === "DEPOSIT_REQUIRED") {
+            setDepositData(payload);
+            setIsDepositModalOpen(true);
+          }
+        } catch (e) {
+          console.error("Failed to parse actionable error payload");
+        }
+      }
+      // -----------------------------------------------------------------
+
       setNodes((nds) =>
         nds.map((node) => {
           if (node.id === nodeId) {
@@ -179,11 +206,18 @@ function NexusCanvas() {
               };
             }
             if (type === "node_failed") {
+              // Clean up the error message for the UI if it's an actionable error
+              const displayError =
+                typeof error === "string" &&
+                error.startsWith("[ACTION_REQUIRED]")
+                  ? "Insufficient Funds (See popup)"
+                  : error;
+
               return {
                 ...node,
                 data: {
                   ...node.data,
-                  executionData: { status: "failed", error },
+                  executionData: { status: "failed", error: displayError },
                 },
               };
             }
@@ -294,12 +328,10 @@ function NexusCanvas() {
         duration: 4000,
       });
 
-      // 🟢 THE FIX: Safely retrieve jobId whether it's nested or at the root
       const returnedJobId = result.jobId || (result.data && result.data.jobId);
 
       if (returnedJobId) {
         setActiveJobId(returnedJobId);
-        // Subscribe the frontend to this workflow's specific room
         socket.emit("subscribe_job", returnedJobId);
         console.log(`🔌 Subscribed to WebSocket room: ${returnedJobId}`);
         toast.info("Watching execution...", { duration: 2000 });
@@ -314,7 +346,6 @@ function NexusCanvas() {
 
   // --- 3. RUN NOW HANDLER ---
   const handleRunNow = async () => {
-    // Reset canvas visuals so the new run trace is clear
     setEdges((eds) =>
       eds.map((e) => ({
         ...e,
@@ -693,7 +724,7 @@ function NexusCanvas() {
               <Clock size={16} className="text-indigo-500" /> Schedules
             </button>
 
-            {/* 🟢 NEW: Run Now Button */}
+            {/* Run Now Button */}
             <button
               className="flex items-center gap-2 px-4 py-2 text-indigo-600 bg-indigo-50 border border-indigo-200 rounded-lg text-sm font-bold hover:bg-indigo-100 transition-colors"
               onClick={handleRunNow}
@@ -771,8 +802,6 @@ function NexusCanvas() {
               />
             )}
           </ReactFlow>
-
-          <LiveLogs />
         </div>
       </div>
 
@@ -786,6 +815,13 @@ function NexusCanvas() {
           nodes={nodes}
         />
       )}
+
+      {/* 🟢 DEPOSIT MODAL */}
+      <DepositModal
+        isOpen={isDepositModalOpen}
+        onClose={() => setIsDepositModalOpen(false)}
+        depositData={depositData}
+      />
 
       {/* ACTIVE SCHEDULES MODAL */}
       <ActiveSchedulesModal
