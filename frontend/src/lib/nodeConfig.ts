@@ -321,4 +321,16 @@ export const NODE_TYPES: Record<string, any> = {
     ],
     outputs: [{ name: 'SAVED_VALUE', desc: 'Saved Data' }]
   },
+  'current_time': {
+    label: 'Get Current Time', category: 'data', icon: Clock,
+    // No inputs needed! It just captures "Now"
+    inputs: [
+      { name: '_info', label: 'Info', type: 'text', placeholder: 'Returns ISO, Unix, and Readable time', readOnly: true }
+    ],
+    outputs: [
+      { name: 'ISO', desc: 'ISO 8601 (2024-03-14T...)' },
+      { name: 'UNIX', desc: 'Seconds (1710...)' },
+      { name: 'READABLE', desc: 'Human Readable String' }
+    ]
+  },
 };
