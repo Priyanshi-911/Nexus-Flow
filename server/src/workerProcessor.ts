@@ -210,7 +210,6 @@ export default async function workerProcessor(job: Job) {
 
         for (const item of itemsToProcess) {
             
-            // --- 🟢 INJECT WORKFLOW ID FOR MEMORY SCOPING ---
             const context = { 
                 ...item.initialContext,
                 SYSTEM_WORKFLOW_ID: workflowId 
